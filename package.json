@@ -17,6 +17,7 @@
     "chai": "^4.2.0",
     "mocha": "^10.4.0",
     "prb-math": "^2.4.3",
+    "solidity-bytes-utils": "^0.8.0",
     "undici": "^6.15.0"
   },
   "devDependencies": {

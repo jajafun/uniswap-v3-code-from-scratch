@@ -6,14 +6,30 @@ import "./interfaces/IUniswapV3Manager.sol";
 import "./interfaces/IUniswapV3Pool.sol";
 import "./lib/TickMath.sol";
 import "./lib/LiquidityMath.sol";
+import "./lib/PoolAddress.sol";
+import "./lib/Path.sol";
 import "hardhat/console.sol";
 
 contract UniswapV3Manager is IUniswapV3Manager {
+    using Path for bytes;
 
     error SlippageCheckFailed(uint256 amount0, uint256 amount1);
+    error TooLittleReceived(uint256 amountOut);
+
+    address public immutable factoryAddress;
+
+    constructor(address _factoryAddress) {
+        factoryAddress = _factoryAddress;
+    }
 
     function mint(MintParams calldata params) public returns (uint256 amount0, uint256 amount1) {
-        IUniswapV3Pool pool = IUniswapV3Pool(params.poolAddress);
+        address poolAddress = PoolAddress.computePoolAddress(
+            factoryAddress,
+            params.token0Address,
+            params.token1Address,
+            params.tickSpacing
+        );
+        IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
 
         (uint160 sqrtPriceX96,) = pool.slot0();
         uint160 sqrtPriceLowerX96 = TickMath.getSqrtRatioAtTick(params.lowerTick);
@@ -46,20 +62,86 @@ contract UniswapV3Manager is IUniswapV3Manager {
         }
     }
 
-    function swap(
-        address poolAddress,
-        bool zeroForOne,
-        uint256 amountSpecified,
-        uint160 sqrtPriceLimitX96,
-        bytes calldata data
-    ) public returns (int256, int256) {
-        return IUniswapV3Pool(poolAddress).swap(
+    function swapSingle(SwapSingleParams calldata params) public returns (uint256 amountOut){
+        amountOut = _swap(
+            params.amountIn,
             msg.sender,
-            zeroForOne,
-            amountSpecified,
-            sqrtPriceLimitX96,
-            data
+            params.sqrtPriceLimitX96,
+            SwapCallbackData({
+                path: abi.encodePacked(
+                    params.tokenInAddress,
+                    params.tokenOutAddress,
+                    params.tickSpacing
+                ),
+                payerAddress: msg.sender
+            })
         );
+    }
+
+    function swap(SwapParams memory params) public returns (uint256 amountOut) {
+        address payerAddress = msg.sender;
+        bool hasMultiplePools;
+
+        while (true) {
+            hasMultiplePools = params.path.hasMultiplePools();
+            params.amountIn = _swap(
+                params.amountIn,
+                hasMultiplePools ? address(this) : params.recipient,
+                0,
+                SwapCallbackData({
+                    path: params.path.getFirstPool(),
+                    payerAddress: payerAddress
+                })
+            );
+
+            if (hasMultiplePools) {
+                payerAddress = address(this);
+                params.path = params.path.skipToken();
+            } else {
+                amountOut = params.amountIn;
+                break;
+            }
+        }
+        if(amountOut < params.minAmountOut) {
+            revert TooLittleReceived(amountOut);
+        }
+    }
+
+    function _swap(
+        uint256 amountIn,
+        address recipient,
+        uint160 sqrtPriceLimitX96,
+        SwapCallbackData memory data
+    ) public returns (uint256 amountOut) {
+        (address tokenInAddress, address tokenOutAddress, uint24 tickSpacing) = data.path.decodeFirstPool();
+        bool zeroForOne = tokenInAddress < tokenOutAddress;
+        uint160 sqrtPriceLimit = sqrtPriceLimitX96;
+        if (sqrtPriceLimitX96 != 0) {
+            if (zeroForOne) {
+                sqrtPriceLimit = TickMath.MIN_SQRT_RATIO + 1;
+            } else {
+                sqrtPriceLimit = TickMath.MAX_SQRT_RATIO - 1;
+            }
+        }
+        (int256 amount0, int256 amount1) = getPool(tokenInAddress, tokenOutAddress, tickSpacing).swap(
+            recipient,
+            zeroForOne,
+            amountIn,
+            sqrtPriceLimit,
+            abi.encode(data)
+        );
+        amountOut = uint256(- (zeroForOne ? amount1 : amount0));
+    }
+
+    function getPool(
+        address token0Address,
+        address token1Address,
+        uint24 tickSpacing
+    ) internal view returns (IUniswapV3Pool pool) {
+        (token0Address, token1Address) = token0Address < token1Address
+            ? (token0Address, token1Address) : (token1Address, token0Address);
+        address poolAddress = PoolAddress.computePoolAddress(factoryAddress, token0Address, token1Address, tickSpacing);
+        pool = IUniswapV3Pool(poolAddress);
     }
 
     function flash(
