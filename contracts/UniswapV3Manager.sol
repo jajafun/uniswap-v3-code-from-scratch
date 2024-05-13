@@ -84,9 +84,11 @@ contract UniswapV3Manager is IUniswapV3Manager {
 
         while (true) {
             hasMultiplePools = params.path.hasMultiplePools();
+            address actualRecipient = hasMultiplePools ? address(this) : params.recipient;
+
             params.amountIn = _swap(
                 params.amountIn,
-                hasMultiplePools ? address(this) : params.recipient,
+                actualRecipient,
                 0,
                 SwapCallbackData({
                     path: params.path.getFirstPool(),
@@ -102,7 +104,8 @@ contract UniswapV3Manager is IUniswapV3Manager {
                 break;
             }
         }
-        if(amountOut < params.minAmountOut) {
+
+        if (amountOut < params.minAmountOut) {
             revert TooLittleReceived(amountOut);
         }
     }
@@ -173,12 +176,15 @@ contract UniswapV3Manager is IUniswapV3Manager {
         int256 amount1,
         bytes calldata data
     ) public {
-        IUniswapV3Pool.CallbackData memory callbackData = abi.decode(data, (IUniswapV3Pool.CallbackData));
-        if (amount0 > 0) {
-            IERC20(callbackData.token0).transferFrom(callbackData.payer, msg.sender, uint256(amount0));
-        }
-        if (amount1 > 0) {
-            IERC20(callbackData.token1).transferFrom(callbackData.payer, msg.sender, uint256(amount1));
+        SwapCallbackData memory callbackData = abi.decode(data, (SwapCallbackData));
+        (address tokenInAddress, address tokenOutAddress, ) = callbackData.path.decodeFirstPool();
+        bool zeroForOne = tokenInAddress < tokenOutAddress;
+        int256 amount = zeroForOne ? amount0 : amount1;
+
+        if (callbackData.payerAddress == address(this)) {
+            IERC20(tokenInAddress).transfer(msg.sender, uint256(amount));
+        } else {
+            IERC20(tokenInAddress).transferFrom(callbackData.payerAddress, msg.sender, uint256(amount));
         }
     }
 
