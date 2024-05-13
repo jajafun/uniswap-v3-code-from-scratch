@@ -12,6 +12,12 @@ contract UniswapV3Quoter {
 
     using Path for bytes;
 
+    address public immutable factoryAddress;
+
+    constructor(address _factoryAddress) {
+        factoryAddress = _factoryAddress;
+    }
+
     struct QuoteSingleParams {
         address tokenInAddress;
         address tokenOutAddress;
@@ -20,17 +26,10 @@ contract UniswapV3Quoter {
         uint160 sqrtPriceLimitX96;
     }
 
-    struct QuoteParams {
-        address poolAddress;
-        uint256 amountIn;
-        uint160 sqrtPriceLimitX96;
-        bool zeroForOne;
-    }
-
     function quote(bytes memory path, uint256 amountIn) public
     returns (uint256 amountOut, uint160[] memory sqrtPriceX96AfterList, int24[] memory tickAfterList){
-        sqrtPriceX96AfterList = new uint160[path.numPools()];
-        tickAfterList = new int24[path.numPools()];
+        sqrtPriceX96AfterList = new uint160[](path.numPools());
+        tickAfterList = new int24[](path.numPools());
 
         uint256 i = 0;
         while (true) {
@@ -62,22 +61,22 @@ contract UniswapV3Quoter {
     function quoteSingle(QuoteSingleParams memory params) public
     returns (uint256 amountOut, uint160 sqrtPriceX96After, int24 tickAfter) {
         IUniswapV3Pool pool = getPool(
-            params.tokenIn,
-            params.tokenOut,
+            params.tokenInAddress,
+            params.tokenOutAddress,
             params.tickSpacing
         );
         bool zeroForOne = params.tokenInAddress < params.tokenOutAddress;
 
         uint160 sqrtPriceTargetX96 = params.sqrtPriceLimitX96;
         if (params.sqrtPriceLimitX96 == 0) {
-            if (params.zeroForOne) {
+            if (zeroForOne) {
                 sqrtPriceTargetX96 = TickMath.MIN_SQRT_RATIO + 1;
             } else {
                 sqrtPriceTargetX96 = TickMath.MAX_SQRT_RATIO - 1;
             }
         }
 
-        try IUniswapV3Pool(params.poolAddress).swap(
+        try pool.swap(
             address(this),
             zeroForOne,
             params.amountIn,
