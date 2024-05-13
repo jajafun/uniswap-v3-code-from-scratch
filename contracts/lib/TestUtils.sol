@@ -21,6 +21,35 @@ contract TestUtils {
         return TickMath.getTickAtSqrtRatio(uint160(a));
     }
 
+    function tick60(uint256 price) public pure returns (int24 tick_) {
+        tick_ = tick(price);
+        tick_ = nearestUsableTick(tick_, 60);
+    }
+
+    function nearestUsableTick(int24 tick_, uint24 tickSpacing)
+        public pure returns (int24 result) {
+        result =
+            int24(divRound(int128(tick_), int128(int24(tickSpacing)))) *
+            int24(tickSpacing);
+
+        if (result < TickMath.MIN_TICK) {
+            result += int24(tickSpacing);
+        } else if (result > TickMath.MAX_TICK) {
+            result -= int24(tickSpacing);
+        }
+    }
+
+    function divRound(int128 x, int128 y)
+        public pure returns (int128 result) {
+        int128 quot = ABDKMath64x64.div(x, y);
+        result = quot >> 64;
+
+        // Check if remainder is greater than 0.5
+        if (quot % 2 ** 64 >= 0x8000000000000000) {
+            result += 1;
+        }
+    }
+
     function sqrtP(uint256 price) public pure returns (uint160) {
         int24 tickIndex = tick(price);
         // tick -> sqrtP

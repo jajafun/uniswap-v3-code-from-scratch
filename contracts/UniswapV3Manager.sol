@@ -30,6 +30,7 @@ contract UniswapV3Manager is IUniswapV3Manager {
             params.tickSpacing
         );
         IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
+        console.log("poolAddress %s", poolAddress);
 
         (uint160 sqrtPriceX96,) = pool.slot0();
         uint160 sqrtPriceLowerX96 = TickMath.getSqrtRatioAtTick(params.lowerTick);
@@ -70,8 +71,8 @@ contract UniswapV3Manager is IUniswapV3Manager {
             SwapCallbackData({
                 path: abi.encodePacked(
                     params.tokenInAddress,
-                    params.tokenOutAddress,
-                    params.tickSpacing
+                    params.tickSpacing,
+                    params.tokenOutAddress
                 ),
                 payerAddress: msg.sender
             })
@@ -126,6 +127,9 @@ contract UniswapV3Manager is IUniswapV3Manager {
                 sqrtPriceLimit = TickMath.MAX_SQRT_RATIO - 1;
             }
         }
+        console.log("tokenInAddress %s", tokenInAddress);
+        console.log("tokenOutAddress %s", tokenOutAddress);
+        console.log("tickSpacing %s", tickSpacing);
         (int256 amount0, int256 amount1) = getPool(tokenInAddress, tokenOutAddress, tickSpacing).swap(
             recipient,
             zeroForOne,
@@ -144,6 +148,7 @@ contract UniswapV3Manager is IUniswapV3Manager {
         (token0Address, token1Address) = token0Address < token1Address
             ? (token0Address, token1Address) : (token1Address, token0Address);
         address poolAddress = PoolAddress.computePoolAddress(factoryAddress, token0Address, token1Address, tickSpacing);
+        console.log("poolAddress2 %s", poolAddress);
         pool = IUniswapV3Pool(poolAddress);
     }
 
@@ -177,7 +182,7 @@ contract UniswapV3Manager is IUniswapV3Manager {
         bytes calldata data
     ) public {
         SwapCallbackData memory callbackData = abi.decode(data, (SwapCallbackData));
-        (address tokenInAddress, address tokenOutAddress, ) = callbackData.path.decodeFirstPool();
+        (address tokenInAddress, address tokenOutAddress,) = callbackData.path.decodeFirstPool();
         bool zeroForOne = tokenInAddress < tokenOutAddress;
         int256 amount = zeroForOne ? amount0 : amount1;
 
