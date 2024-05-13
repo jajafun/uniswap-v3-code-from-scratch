@@ -119,7 +119,7 @@ contract UniswapV3Manager is IUniswapV3Manager {
         (address tokenInAddress, address tokenOutAddress, uint24 tickSpacing) = data.path.decodeFirstPool();
         bool zeroForOne = tokenInAddress < tokenOutAddress;
         uint160 sqrtPriceLimit = sqrtPriceLimitX96;
-        if (sqrtPriceLimitX96 != 0) {
+        if (sqrtPriceLimitX96 == 0) {
             if (zeroForOne) {
                 sqrtPriceLimit = TickMath.MIN_SQRT_RATIO + 1;
             } else {
