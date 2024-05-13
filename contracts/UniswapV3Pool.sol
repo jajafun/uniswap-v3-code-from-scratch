@@ -66,7 +66,7 @@ contract UniswapV3Pool is IUniswapV3Pool {
     address public immutable factory;
     address public immutable token0;
     address public immutable token1;
-    address public immutable tickSpacing;
+    uint24 public immutable tickSpacing;
 
     // 把经常同时读取的变量封装在一起，节省gas
     struct Slot0 {

@@ -14,7 +14,7 @@ contract UniswapV3Factory is IUniswapV3PoolDeployer {
     event PoolCreated(
         address indexed token0,
         address indexed token1,
-        address indexed tickSpacing,
+        uint24 indexed tickSpacing,
         address pool
     );
 
