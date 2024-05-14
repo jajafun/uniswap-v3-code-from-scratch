@@ -20,27 +20,28 @@ contract UniswapV3Factory is IUniswapV3PoolDeployer {
 
     PoolParameters public parameters;
 
-    mapping(uint24 => bool) public tickSpacings;
+    mapping(uint24 => uint24) public fees;
     mapping(address => mapping(address => mapping(uint24 => address))) public pools;
 
     constructor() {
-        tickSpacings[10] = true;
-        tickSpacings[60] = true;
+        tickSpacings[500] = 10;
+        tickSpacings[3000] = 60;
     }
 
     function createPool(
         address token0Address,
         address token1Address,
-        uint24 tickSpacing
+        uint24 fee
     ) public returns (address poolAddress) {
         if (token0Address == token1Address) {
             revert TokensMustBeDifferent();
         }
-        if (!tickSpacings[tickSpacing]) {
+        if (!fees[fee] == 0) {
             revert UnsupportedTickSpacing();
         }
 
-        (token0Address, token1Address) = token0Address < token1Address ? (token0Address, token1Address) : (token1Address, token0Address);
+        (token0Address, token1Address) = token0Address < token1Address ?
+            (token0Address, token1Address) : (token1Address, token0Address);
 
         if (token0Address == address(0)) {
             revert ZeroAddressNotAllowed();
@@ -54,19 +55,20 @@ contract UniswapV3Factory is IUniswapV3PoolDeployer {
             factoryAddress: address(this),
             token0Address: token0Address,
             token1Address: token1Address,
-            tickSpacing: tickSpacing
+            tickSpacing: fees[fee],
+            fee: fee
         });
 
         poolAddress = address(new UniswapV3Pool{
-                salt: keccak256(abi.encodePacked(token0Address, token1Address, tickSpacing))
+                salt: keccak256(abi.encodePacked(token0Address, token1Address, fee))
             }()
         );
 
         delete parameters;
 
-        pools[token0Address][token1Address][tickSpacing] = poolAddress;
-        pools[token1Address][token0Address][tickSpacing] = poolAddress;
+        pools[token0Address][token1Address][fee] = poolAddress;
+        pools[token1Address][token0Address][fee] = poolAddress;
 
-        emit PoolCreated(token0Address, token1Address, tickSpacing, poolAddress);
+        emit PoolCreated(token0Address, token1Address, fee, poolAddress);
     }
 }
