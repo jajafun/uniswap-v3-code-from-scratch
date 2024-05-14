@@ -193,17 +193,17 @@ contract UniswapV3Manager is IUniswapV3Manager {
         }
     }
 
-    function uniswapV3FlashCallback(bytes calldata data) public {
+    function uniswapV3FlashCallback(uint256 fee0, uint256 fee1, bytes calldata data) public {
         (address token0, address token1, uint256 amount0, uint256 amount1) = abi.decode(data,
             (address, address, uint256, uint256));
 
         // todo do something
 
         if (amount0 > 0) {
-            IERC20(token0).transfer(msg.sender, uint256(amount0));
+            IERC20(token0).transfer(msg.sender, amount0 + fee0);
         }
         if (amount1 > 0) {
-            IERC20(token1).transfer(msg.sender, uint256(amount1));
+            IERC20(token1).transfer(msg.sender, amount1 + fee1);
         }
     }
 
