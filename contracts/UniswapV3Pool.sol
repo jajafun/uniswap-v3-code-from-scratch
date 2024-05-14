@@ -235,7 +235,7 @@ contract UniswapV3Pool is IUniswapV3Pool {
                 position.tokensOwed1
             ) = (
                 position.tokensOwed0 + uint128(amount0),
-                position.tokensOwed1 + uint128(amount1),
+                position.tokensOwed1 + uint128(amount1)
             );
         }
 
@@ -498,7 +498,7 @@ contract UniswapV3Pool is IUniswapV3Pool {
             feeGrowthGlobal1X128_
         );
 
-        position.update(params.liquidityDelta, feeGrowthGlobal0X128, feeGrowthGlobal1X128);
+        position.update(params.liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
 
         if (slot0_.tick < params.lowerTick) {
             amount0 = Math.calcAmount0Delta(
