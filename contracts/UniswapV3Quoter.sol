@@ -96,7 +96,7 @@ contract UniswapV3Quoter {
     ) external view {
         address poolAddress = abi.decode(data, (address));
         uint256 amountOut = amount0Delta > 0 ? uint256(- amount1Delta) : uint256(- amount0Delta);
-        (uint160 sqrtPriceX96After, int24 tickAfter) = IUniswapV3Pool(poolAddress).slot0();
+        (uint160 sqrtPriceX96After, int24 tickAfter,,,) = IUniswapV3Pool(poolAddress).slot0();
         assembly {
         // mload: 加载指定内存地址的值
         // mstore: 设置指定内存的值

@@ -16,6 +16,7 @@ import "./lib/TickMath.sol";
 import "./lib/SwapMath.sol";
 import "./lib/LiquidityMath.sol";
 import "./lib/FixedPoint128.sol";
+import "./lib/Oracle.sol";
 
 import "hardhat/console.sol";
 
@@ -25,6 +26,7 @@ contract UniswapV3Pool is IUniswapV3Pool {
     using TickBitmap for mapping(int16 => uint256);
     using Position for mapping(bytes32 => Position.Info);
     using Position for Position.Info;
+    using Oracle for Oracle.Observation[65535];
 
     error InsufficientInputAmount();
     error InvalidPriceLimit();
@@ -78,6 +80,11 @@ contract UniswapV3Pool is IUniswapV3Pool {
         uint256 amount1
     );
 
+    event IncreaseObservationCardinalityNext(
+        uint16 observationCardinalityNextOld,
+        uint16 observationCardinalityNextNew
+    );
+
     // 价格的下限
     int24 internal constant MIN_TICK = - 887272;
     // 价格的上限
@@ -96,6 +103,9 @@ contract UniswapV3Pool is IUniswapV3Pool {
     struct Slot0 {
         uint160 sqrtPriceX96;
         int24 tick;
+        uint16 observationIndex;
+        uint16 observationCardinality;
+        uint16 observationCardinalityNext;
     }
 
     Slot0 public slot0;
@@ -143,6 +153,7 @@ contract UniswapV3Pool is IUniswapV3Pool {
     // 池子的所有流动性位置信息
     // key是lp地址 + lowerTick索引 + upperTick索引的hash值
     mapping(bytes32 => Position.Info) public positions;
+    Oracle.Observation[65535] public observations;
 
     constructor() {
         (factory, token0, token1, tickSpacing, fee) = IUniswapV3PoolDeployer(msg.sender).parameters();
@@ -153,9 +164,13 @@ contract UniswapV3Pool is IUniswapV3Pool {
             revert AlreadyInitialized();
         }
         int24 tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
+        (uint16 cardinality, uint16 cardinalityNext) = observations.initialize(_blockTimestamp());
         slot0 = Slot0({
             sqrtPriceX96: sqrtPriceX96,
-            tick: tick
+            tick: tick,
+            observationIndex: 0,
+            observationCardinality: cardinality,
+            observationCardinalityNext: cardinalityNext
         });
     }
 
@@ -223,12 +238,12 @@ contract UniswapV3Pool is IUniswapV3Pool {
                 owner: msg.sender,
                 lowerTick: lowerTick,
                 upperTick: upperTick,
-                liquidityDelta: -(int128(amount))
+                liquidityDelta: - (int128(amount))
             })
         );
 
-        amount0 = uint256(-amount0Int);
-        amount1 = uint256(-amount1Int);
+        amount0 = uint256(- amount0Int);
+        amount1 = uint256(- amount1Int);
 
         if (amount0 > 0 || amount1 > 0) {
             (
@@ -346,7 +361,29 @@ contract UniswapV3Pool is IUniswapV3Pool {
 
         // tick移动，更新合约状态tick为最新的提供流动性的tick
         if (state.tick != slot0_.tick) {
-            (slot0.sqrtPriceX96, slot0.tick) = (state.sqrtPriceX96, state.tick);
+            (
+                uint16 observationIndex,
+                uint16 observationCardinality
+            ) = observations.write(
+                slot0_.observationIndex,
+                _blockTimestamp(),
+                slot0_.tick,
+                slot0_.observationCardinality,
+                slot0_.observationCardinalityNext
+            );
+            (
+                slot0.sqrtPriceX96,
+                slot0.tick,
+                slot0.observationIndex,
+                slot0.observationCardinality
+            ) = (
+                state.sqrtPriceX96,
+                state.tick,
+                observationIndex,
+                observationCardinality
+            );
+        } else {
+            slot0.sqrtPriceX96 = state.sqrtPriceX96;
         }
 
         // 循环之后更新池子的流动性
@@ -428,6 +465,34 @@ contract UniswapV3Pool is IUniswapV3Pool {
         }
 
         emit Flash(msg.sender, amount0, amount1);
+    }
+
+    function increaseObservationCardinalityNext(
+        uint16 observationCardinalityNext
+    ) public {
+        uint16 observationCardinalityNextOld = slot0.observationCardinalityNext;
+        uint16 observationCardinalityNextNew = observations.grow(
+            observationCardinalityNextOld,
+            observationCardinalityNext
+        );
+
+        if (observationCardinalityNextNew != observationCardinalityNextOld) {
+            slot0.observationCardinalityNext = observationCardinalityNextNew;
+            emit IncreaseObservationCardinalityNext(observationCardinalityNextOld, observationCardinalityNextNew);
+        }
+    }
+
+    function observe(uint32[] calldata secondsAgos)
+    public
+    view
+    returns (int56[] memory tickCumulatives) {
+        return observations.observe(
+            _blockTimestamp(),
+            secondsAgos,
+            slot0.tick,
+            slot0.observationIndex,
+            slot0.observationCardinality
+        );
     }
 
     function collect(
@@ -545,6 +610,10 @@ contract UniswapV3Pool is IUniswapV3Pool {
 
     function balance1() internal returns (uint256 balance) {
         balance = IERC20(token1).balanceOf(address(this));
+    }
+
+    function _blockTimestamp() internal view returns (uint32 timestamp) {
+        timestamp = uint32(block.timestamp);
     }
 
 }

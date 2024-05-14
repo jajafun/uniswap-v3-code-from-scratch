@@ -32,7 +32,7 @@ contract UniswapV3Manager is IUniswapV3Manager {
         IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
         console.log("poolAddress %s", poolAddress);
 
-        (uint160 sqrtPriceX96,) = pool.slot0();
+        (uint160 sqrtPriceX96,,,,) = pool.slot0();
         uint160 sqrtPriceLowerX96 = TickMath.getSqrtRatioAtTick(params.lowerTick);
         uint160 sqrtPriceUpperX96 = TickMath.getSqrtRatioAtTick(params.upperTick);
 
