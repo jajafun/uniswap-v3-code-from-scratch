@@ -2,9 +2,11 @@ const {assert, expect} = require('chai');
 const {ethers} = require('hardhat');
 const {AbiCoder, parseEther} = require("ethers");
 
-let signers, accounts, ownerSigner, ownerAccount, lpSigner, lpAccount;
+let signers, accounts, ownerSigner, ownerAccount, lpSigner, lpAccount, traderSigner, traderAccount;
 let token0, token1, token0Account, token1Account;
-let testUtils, pool, poolAccount, manager, managerAccount;
+let testUtils, factory, factoryAddress, wethUsdcPool, wethUsdcPoolAddress, manager, managerAccount;
+
+const poolArtifactLocation = "./artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json";
 
 describe("UniswapV3Pool flash tests", () => {
     before(async () => {
@@ -41,9 +43,9 @@ describe("UniswapV3Pool flash tests", () => {
                 }
                 const types = ["address", "address", "uint256", "uint256"];
                 const dataEncoded = AbiCoder.defaultAbiCoder().encode(types, [data.token0, data.token1, data.amount0, data.amount1]);
-                await manager.connect(traderSigner).flash(poolAccount, amount0, amount1 , dataEncoded);
-                const filter = pool.filters.Flash;
-                const events = await pool.queryFilter(filter, -1);
+                await manager.connect(ownerSigner).flash(wethUsdcPoolAddress, amount0, amount1 , dataEncoded);
+                const filter = wethUsdcPool.filters.Flash;
+                const events = await wethUsdcPool.queryFilter(filter, -1);
                 swapEvent = events[0];
             })
 
@@ -61,12 +63,14 @@ describe("UniswapV3Pool flash tests", () => {
 
 
 async function mintParams(lowerPrice, upperPrice, amount0, amount1) {
-    const lowerTick = await testUtils.tick(lowerPrice);
-    const upperTick = await testUtils.tick(upperPrice);
+    const lowerTick = await testUtils.tick60(lowerPrice);
+    const upperTick = await testUtils.tick60(upperPrice);
     return {
-        poolAddress: "0x0",
-        lowerTick,
-        upperTick,
+        token0Address: token0Account,
+        token1Address: token1Account,
+        fee: 3000,
+        lowerTick: lowerTick,
+        upperTick: upperTick,
         amount0Desired: parseEther(amount0),
         amount1Desired: parseEther(amount1),
         amount0Min: 0,
@@ -84,22 +88,30 @@ async function setup(params) {
     traderSigner = signers[6];
     traderAccount = accounts[6];
 
-    token0 = await ethers.deployContract("ERC20Mintable", ["Ether", "WETH", ownerAccount]);
     token1 = await ethers.deployContract("ERC20Mintable", ["USDC", "USDC", ownerAccount]);
+    token0 = await ethers.deployContract("ERC20Mintable", ["Ether", "WETH", ownerAccount]);
     token0Account = token0.target;
     token1Account = token1.target;
+
+    factory = await ethers.deployContract("UniswapV3Factory");
+    factoryAddress = factory.target;
+
+    await factory.createPool(token0Account, token1Account, 3000);
+    const poolCreatedEvents = await factory.queryFilter(factory.filters.PoolCreated, 0);
+    wethUsdcPoolAddress = poolCreatedEvents[0].args[3];
+
+    const { abi } = JSON.parse(require("fs").readFileSync(poolArtifactLocation).toString());
+    wethUsdcPool = new ethers.Contract(wethUsdcPoolAddress, abi, ethers.provider);
+    await wethUsdcPool.connect(lpSigner).initialize(await testUtils.sqrtP(5000));
 
     await token0.mint(lpAccount, params.lpToken0Balance);
     await token1.mint(lpAccount, params.lpToken1Balance);
 
-    const currentSqrtP = await testUtils.sqrtP(params.currentPrice);
-    const currentTick = await testUtils.tick(params.currentPrice);
-    pool = await ethers.deployContract("UniswapV3Pool",
-        [token0Account, token1Account, currentSqrtP, currentTick]);
-    poolAccount = pool.target;
-
-    manager = await ethers.deployContract("UniswapV3Manager");
+    manager = await ethers.deployContract("UniswapV3Manager", [factoryAddress]);
     managerAccount = manager.target;
+
+    await token0.mint(managerAccount, params.lpToken0Balance);
+    await token1.mint(managerAccount, params.lpToken1Balance);
 
     await token0.connect(lpSigner).approve(managerAccount, params.lpToken0Balance);
     await token1.connect(lpSigner).approve(managerAccount, params.lpToken1Balance);
@@ -107,7 +119,8 @@ async function setup(params) {
     const mintParamsArr = params.mintParamsArr;
     for (let i = 0; i < mintParamsArr.length; i++) {
         const mintParams = mintParamsArr[i];
-        mintParams.poolAddress = poolAccount;
+        mintParams.token0Address = token0Account;
+        mintParams.token1Address = token1Account;
         await manager.connect(lpSigner).mint(mintParams);
     }
 }
