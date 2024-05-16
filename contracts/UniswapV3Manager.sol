@@ -27,7 +27,7 @@ contract UniswapV3Manager is IUniswapV3Manager {
             factoryAddress,
             params.token0Address,
             params.token1Address,
-            params.tickSpacing
+            params.fee
         );
         IUniswapV3Pool pool = IUniswapV3Pool(poolAddress);
         console.log("poolAddress %s", poolAddress);
@@ -71,7 +71,7 @@ contract UniswapV3Manager is IUniswapV3Manager {
             SwapCallbackData({
                 path: abi.encodePacked(
                     params.tokenInAddress,
-                    params.tickSpacing,
+                    params.fee,
                     params.tokenOutAddress
                 ),
                 payerAddress: msg.sender
@@ -117,7 +117,7 @@ contract UniswapV3Manager is IUniswapV3Manager {
         uint160 sqrtPriceLimitX96,
         SwapCallbackData memory data
     ) public returns (uint256 amountOut) {
-        (address tokenInAddress, address tokenOutAddress, uint24 tickSpacing) = data.path.decodeFirstPool();
+        (address tokenInAddress, address tokenOutAddress, uint24 fee) = data.path.decodeFirstPool();
         bool zeroForOne = tokenInAddress < tokenOutAddress;
         uint160 sqrtPriceLimit = sqrtPriceLimitX96;
         if (sqrtPriceLimitX96 == 0) {
@@ -129,8 +129,8 @@ contract UniswapV3Manager is IUniswapV3Manager {
         }
         console.log("tokenInAddress %s", tokenInAddress);
         console.log("tokenOutAddress %s", tokenOutAddress);
-        console.log("tickSpacing %s", tickSpacing);
-        (int256 amount0, int256 amount1) = getPool(tokenInAddress, tokenOutAddress, tickSpacing).swap(
+        console.log("fee %s", fee);
+        (int256 amount0, int256 amount1) = getPool(tokenInAddress, tokenOutAddress, fee).swap(
             recipient,
             zeroForOne,
             amountIn,
@@ -143,11 +143,11 @@ contract UniswapV3Manager is IUniswapV3Manager {
     function getPool(
         address token0Address,
         address token1Address,
-        uint24 tickSpacing
+        uint24 fee
     ) internal view returns (IUniswapV3Pool pool) {
         (token0Address, token1Address) = token0Address < token1Address
             ? (token0Address, token1Address) : (token1Address, token0Address);
-        address poolAddress = PoolAddress.computePoolAddress(factoryAddress, token0Address, token1Address, tickSpacing);
+        address poolAddress = PoolAddress.computePoolAddress(factoryAddress, token0Address, token1Address, fee);
         console.log("poolAddress2 %s", poolAddress);
         pool = IUniswapV3Pool(poolAddress);
     }

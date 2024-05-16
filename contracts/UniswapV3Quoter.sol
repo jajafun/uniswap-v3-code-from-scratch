@@ -21,24 +21,29 @@ contract UniswapV3Quoter {
     struct QuoteSingleParams {
         address tokenInAddress;
         address tokenOutAddress;
-        uint24 tickSpacing;
+        uint24 fee;
         uint256 amountIn;
         uint160 sqrtPriceLimitX96;
     }
 
-    function quote(bytes memory path, uint256 amountIn) public
-    returns (uint256 amountOut, uint160[] memory sqrtPriceX96AfterList, int24[] memory tickAfterList){
+    function quote(bytes memory path, uint256 amountIn)
+    public
+    returns (
+        uint256 amountOut,
+        uint160[] memory sqrtPriceX96AfterList,
+        int24[] memory tickAfterList
+    ){
         sqrtPriceX96AfterList = new uint160[](path.numPools());
         tickAfterList = new int24[](path.numPools());
 
         uint256 i = 0;
         while (true) {
-            (address tokenInAddress, address tokenOutAddress, uint24 tickSpacing) = path.decodeFirstPool();
+            (address tokenInAddress, address tokenOutAddress, uint24 fee) = path.decodeFirstPool();
             (uint256 amountOut_, uint160 sqrtPriceX96After, int24 tickAfter) = quoteSingle(
                 QuoteSingleParams({
                     tokenInAddress: tokenInAddress,
                     tokenOutAddress: tokenOutAddress,
-                    tickSpacing: tickSpacing,
+                    fee: fee,
                     amountIn: amountIn,
                     sqrtPriceLimitX96: 0
                 })
@@ -58,12 +63,17 @@ contract UniswapV3Quoter {
         }
     }
 
-    function quoteSingle(QuoteSingleParams memory params) public
-    returns (uint256 amountOut, uint160 sqrtPriceX96After, int24 tickAfter) {
+    function quoteSingle(QuoteSingleParams memory params)
+    public
+    returns (
+        uint256 amountOut,
+        uint160 sqrtPriceX96After,
+        int24 tickAfter
+    ) {
         IUniswapV3Pool pool = getPool(
             params.tokenInAddress,
             params.tokenOutAddress,
-            params.tickSpacing
+            params.fee
         );
         bool zeroForOne = params.tokenInAddress < params.tokenOutAddress;
 
@@ -114,11 +124,11 @@ contract UniswapV3Quoter {
     function getPool(
         address token0Address,
         address token1Address,
-        uint24 tickSpacing
+        uint24 fee
     ) internal view returns (IUniswapV3Pool pool) {
         (token0Address, token1Address) = token0Address < token1Address
             ? (token0Address, token1Address) : (token1Address, token0Address);
-        address poolAddress = PoolAddress.computePoolAddress(factoryAddress, token0Address, token1Address, tickSpacing);
+        address poolAddress = PoolAddress.computePoolAddress(factoryAddress, token0Address, token1Address, fee);
         pool = IUniswapV3Pool(poolAddress);
     }
 }

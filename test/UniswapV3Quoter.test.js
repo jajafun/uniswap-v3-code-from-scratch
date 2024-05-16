@@ -44,15 +44,18 @@ describe("UniswapV3Quotor", () => {
         factory = await ethers.deployContract("UniswapV3Factory");
         factoryAddress = factory.target;
 
-        await factory.createPool(wethAddress, usdcAddress, 60);
-        await factory.createPool(wethAddress, uniAddress, 60);
+        await factory.createPool(wethAddress, usdcAddress, 3000);
+        await factory.createPool(wethAddress, uniAddress, 3000);
 
         const events = await factory.queryFilter(factory.filters.PoolCreated, 0);
         wethUsdcPoolAddress = events[0].args[3];
         wethUniPoolAddress = events[1].args[3];
+
         const { abi } = JSON.parse(require("fs").readFileSync(poolArtifactLocation).toString());
+
         wethUsdcPool = new ethers.Contract(wethUsdcPoolAddress, abi, ethers.provider);
         await wethUsdcPool.connect(lpSigner).initialize(await testUtils.sqrtP(5000));
+
         wethUniPool = new ethers.Contract(wethUniPoolAddress, abi, ethers.provider);
         await wethUniPool.connect(lpSigner).initialize(await testUtils.sqrtP(10));
 
@@ -64,6 +67,7 @@ describe("UniswapV3Quotor", () => {
         await weth.mint(lpAccount, lpWethBalance);
         await usdc.mint(lpAccount, lpUsdcBalance);
         await uni.mint(lpAccount, lpUniBalance);
+
         await weth.mint(traderAccount, traderWethBalance);
         await usdc.mint(traderAccount, traderUsdcBalance);
         await uni.mint(traderAccount, traderUniBalance);
@@ -74,6 +78,7 @@ describe("UniswapV3Quotor", () => {
         await weth.connect(lpSigner).approve(managerAddress, lpWethBalance);
         await usdc.connect(lpSigner).approve(managerAddress, lpUsdcBalance);
         await uni.connect(lpSigner).approve(managerAddress, lpUniBalance);
+
         await weth.connect(traderSigner).approve(managerAddress, traderWethBalance);
         await usdc.connect(traderSigner).approve(managerAddress, traderUsdcBalance);
         await uni.connect(traderSigner).approve(managerAddress, traderUniBalance);
@@ -81,7 +86,7 @@ describe("UniswapV3Quotor", () => {
         await manager.connect(lpSigner).mint({
             token0Address: wethAddress,
             token1Address: usdcAddress,
-            tickSpacing: 60,
+            fee: 3000,
             lowerTick: await testUtils.tick60(4545),
             upperTick: await testUtils.tick60(5500),
             amount0Desired: parseEther("1"),
@@ -93,7 +98,7 @@ describe("UniswapV3Quotor", () => {
         await manager.connect(lpSigner).mint({
             token0Address: wethAddress,
             token1Address: uniAddress,
-            tickSpacing: 60,
+            fee: 3000,
             lowerTick: await testUtils.tick60(7),
             upperTick: await testUtils.tick60(13),
             amount0Desired: parseEther("10"),
@@ -110,12 +115,12 @@ describe("UniswapV3Quotor", () => {
         const quote = await quoter.quoteSingle.staticCall({
             tokenInAddress: wethAddress,
             tokenOutAddress: usdcAddress,
-            tickSpacing: 60,
+            fee: 3000,
             amountIn: parseEther("0.01337"),
             sqrtPriceLimitX96: await testUtils.sqrtP(4993),
         })
-        assert.equal(quote[0], parseEther("66.807890094075832948"));
-        assert.equal(quote[1], "5598801440519370714122087599529");
+        assert.equal(quote[0], parseEther("66.607588492545060572"));
+        assert.equal(quote[1], "5598811701211424979240405511481");
         assert.equal(quote[2], "85163")
     })
 
@@ -123,70 +128,76 @@ describe("UniswapV3Quotor", () => {
         const quote = await quoter.quoteSingle.staticCall({
             tokenInAddress: usdcAddress,
             tokenOutAddress: wethAddress,
-            tickSpacing: 60,
+            fee: 3000,
             amountIn: parseEther("42"),
             sqrtPriceLimitX96: await testUtils.sqrtP(5005),
         })
-        assert.equal(quote[0], parseEther("0.008396935169727250"));
-        assert.equal(quote[1], "5604375256428966008218349114979");
+        assert.equal(quote[0], parseEther("0.008371754005882864"));
+        assert.equal(quote[1], "5604368801926411075902760472621");
         assert.equal(quote[2], "85183")
     })
 
     it("WETH => USDC quote and swap", async function () {
         const sqrtPriceLimitX96 = await testUtils.sqrtP(4993);
         const amountIn = parseEther("0.01337");
+
         const quote = await quoter.quoteSingle.staticCall({
             tokenInAddress: wethAddress,
             tokenOutAddress: usdcAddress,
-            tickSpacing: 60,
-            amountIn: parseEther("0.01337"),
-            sqrtPriceLimitX96: await testUtils.sqrtP(4993),
-        });
-        const amountOut = quote[0];
-        // const data = {
-        //     token0: wethAddress,
-        //     token1: usdcAddress,
-        //     payer: traderAccount
-        // }
-        // const types = ["address", "address", "address"];
-        // let dataEncoded = AbiCoder.defaultAbiCoder().encode(types, [data.token0, data.token1, data.payer]);
-        await manager.connect(traderSigner).swapSingle({
-            tokenInAddress: wethAddress,
-            tokenOutAddress: usdcAddress,
-            tickSpacing: 60,
+            fee: 3000,
             amountIn,
             sqrtPriceLimitX96
         });
+
+        const amountOut = quote[0];
+
+        await manager.connect(traderSigner).swapSingle({
+            tokenInAddress: wethAddress,
+            tokenOutAddress: usdcAddress,
+            fee: 3000,
+            amountIn,
+            sqrtPriceLimitX96
+        });
+
         const filter = wethUsdcPool.filters.Swap;
         const events = await wethUsdcPool.queryFilter(filter, -1);
         const swapEvent = events[0];
+
         assert.equal(swapEvent.args[2], amountIn);
         assert.equal(-swapEvent.args[3], amountOut);
     })
 
     it(" WETH <= USDC quote and swap", async function () {
         const sqrtPriceLimitX96 = await testUtils.sqrtP(5010);
-
         const amountIn = parseEther("55")
+
         const quote = await quoter.quoteSingle.staticCall({
             tokenInAddress: usdcAddress,
             tokenOutAddress: wethAddress,
-            tickSpacing: 60,
+            fee: 3000,
             amountIn,
             sqrtPriceLimitX96
         });
+
         const amountOut = quote[0];
+
         await manager.connect(traderSigner).swapSingle({
             tokenInAddress: usdcAddress,
             tokenOutAddress: wethAddress,
-            tickSpacing: 60,
+            fee: 3000,
             amountIn,
             sqrtPriceLimitX96
         });
+
         const filter = wethUsdcPool.filters.Swap;
         const events = await wethUsdcPool.queryFilter(filter, -1);
         const swapEvent = events[1];
+
         assert.equal(-swapEvent.args[2], amountOut);
         assert.equal(swapEvent.args[3], amountIn);
+    })
+
+    it("UNI => WETH => USDC", async function () {
+
     })
 })

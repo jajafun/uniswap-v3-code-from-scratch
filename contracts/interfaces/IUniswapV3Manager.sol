@@ -5,7 +5,7 @@ interface IUniswapV3Manager {
     struct MintParams {
         address token0Address;
         address token1Address;
-        uint24 tickSpacing;
+        uint24 fee;
         int24 lowerTick;
         int24 upperTick;
         uint256 amount0Desired;
@@ -17,7 +17,7 @@ interface IUniswapV3Manager {
     struct SwapSingleParams {
         address tokenInAddress;
         address tokenOutAddress;
-        uint24 tickSpacing;
+        uint24 fee;
         uint256 amountIn;
         uint160 sqrtPriceLimitX96;
     }

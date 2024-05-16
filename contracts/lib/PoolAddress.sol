@@ -9,7 +9,7 @@ library PoolAddress {
         address factoryAddress,
         address token0Address,
         address token1Address,
-        uint24 tickSpacing
+        uint24 fee
     ) internal pure returns (address poolAddress) {
         require(token0Address < token1Address);
 
@@ -21,7 +21,7 @@ library PoolAddress {
                         abi.encodePacked(
                             hex"ff",
                             factoryAddress,
-                            keccak256(abi.encodePacked(token0Address, token1Address, tickSpacing)),
+                            keccak256(abi.encodePacked(token0Address, token1Address, fee)),
                             keccak256(type(UniswapV3Pool).creationCode)
                         )
                     )
