@@ -5,7 +5,7 @@ const {parseEther, AbiCoder, keccak256, solidityPacked} = ethers;
 
 let signers, accounts, ownerSigner, ownerAddress, lpSigner, lpAddress;
 let weth, usdc, wethAddress, usdcAddress;
-let testUtils, factory, factoryAddress, wethUsdcPool, wethUsdcPoolAddress, pool, poolAddress, manager, managerAddress;
+let testUtils, factory, factoryAddress, wethUsdcPool, wethUsdcPoolAddress, manager, managerAddress;
 
 const poolArtifactLocation = "./artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json";
 
@@ -102,7 +102,7 @@ describe("UniswapV3Pool mint tests", function () {
 
     //             5000
     //             |---------
-    // 4545 ------4996
+    // 4000 ------4996
     describe("mint range below current price ", function () {
         let currentPrice = "5000";
         let poolBalance;
@@ -188,7 +188,7 @@ describe("UniswapV3Pool mint tests", function () {
 
     //         5000
     // ---------|
-    //       5001 ---------- 6250
+    //       5027 ---------- 6250
     describe("mint range above current price ", function () {
         let currentPrice = "5000";
         let poolBalance;
