@@ -11,7 +11,6 @@ const poolArtifactLocation = "./artifacts/contracts/UniswapV3Pool.sol/UniswapV3P
 
 describe("UniswapV3Pool mint tests", function () {
     before(async () => {
-        // 部署计算测试数据的合约
         testUtils = await ethers.deployContract("TestUtils");
     })
 
@@ -103,13 +102,15 @@ describe("UniswapV3Pool mint tests", function () {
 
     //             5000
     //             |---------
-    // 4545 ------4999
+    // 4545 ------4996
     describe("mint range below current price ", function () {
         let currentPrice = "5000";
         let poolBalance;
         const mintParamsArr = [];
+        const expectedAmount0 = parseEther("0");
+        const expectedAmount1 = parseEther("4999.999999999999999994");
         before(async function () {
-            const mintParams0 = await mintParams(4545, 4999, "1", currentPrice);
+            const mintParams0 = await mintParams(4000, 4996, "1", currentPrice);
             mintParamsArr.push(mintParams0);
             const setupParams = {
                 lpToken0Balance: parseEther("1"),
@@ -121,24 +122,66 @@ describe("UniswapV3Pool mint tests", function () {
         })
 
         it("pool balances", function () {
-            assert.equal(poolBalance.poolBalance0, parseEther("0"));
-            assert.equal(poolBalance.poolBalance1, parseEther("4999.999999999999999997"))
+            assert.equal(poolBalance.poolBalance0, expectedAmount0);
+            assert.equal(poolBalance.poolBalance1, expectedAmount1)
         });
 
         it("mint state", async function () {
-            await assertMany({
-                pool,
+            await assertPoolState({
+                pool: wethUsdcPool
+            }, {
+                sqrtPriceX96: await testUtils.sqrtP(currentPrice),
+                tick: await testUtils.tick(currentPrice),
+                fees: [0, 0]
+            });
+
+            await assertBalances({
                 token0: weth,
                 token1: usdc
-            },{
+            }, {
+                userBalance0: parseEther("1") - expectedAmount0,
+                userBalance1: parseEther("5000") - expectedAmount1,
                 poolBalance0: poolBalance.poolBalance0,
-                poolBalance1: poolBalance.poolBalance1,
+                poolBalance1: poolBalance.poolBalance1
+            });
+
+            await assertPosition({
+                pool: wethUsdcPool
+            }, {
                 lowerTick: mintParamsArr[0].lowerTick,
                 upperTick: mintParamsArr[0].upperTick,
-                positionLiquidity: await liquidity(mintParamsArr[0], currentPrice),
-                currentLiquidity: 0,
-                sqrtPriceX96: await testUtils.sqrtP(currentPrice),
-                tick: await testUtils.tick(currentPrice)
+                liquidity: await liquidity(mintParamsArr[0], currentPrice),
+                feeGrowthInside0LastX128: 0,
+                feeGrowthInside1LastX128: 0,
+                tokensOwed0: 0,
+                tokensOwed1: 0
+            });
+
+            await assertTick({
+                pool: wethUsdcPool,
+            }, {
+                tick: mintParamsArr[0].lowerTick,
+                initialized: true,
+                liquidityGross: await liquidity(mintParamsArr[0], currentPrice),
+                liquidityNet: await liquidity(mintParamsArr[0], currentPrice)
+            })
+
+            await assertTick({
+                pool: wethUsdcPool,
+            }, {
+                tick: mintParamsArr[0].upperTick,
+                initialized: true,
+                liquidityGross: await liquidity(mintParamsArr[0], currentPrice),
+                liquidityNet: -(await liquidity(mintParamsArr[0], currentPrice))
+            })
+
+            await assertObservation({
+                pool: wethUsdcPool
+            }, {
+                index: 0,
+                timestamp: 1,
+                tickCumulative: 0,
+                initialized: true
             })
         })
     })
@@ -150,8 +193,10 @@ describe("UniswapV3Pool mint tests", function () {
         let currentPrice = "5000";
         let poolBalance;
         const mintParamsArr = [];
+        const expectedAmount0 = parseEther("1");
+        const expectedAmount1 = parseEther("0");
         before(async function () {
-            const mintParams0 = await mintParams(5001, 6250, "1", currentPrice);
+            const mintParams0 = await mintParams(5027, 6250, "1", currentPrice);
             mintParamsArr.push(mintParams0);
             const setupParams = {
                 lpToken0Balance: parseEther("1"),
@@ -163,24 +208,66 @@ describe("UniswapV3Pool mint tests", function () {
         })
 
         it("pool balances", function () {
-            assert.equal(poolBalance.poolBalance0, parseEther("1"));
-            assert.equal(poolBalance.poolBalance1, parseEther("0"))
+            assert.equal(poolBalance.poolBalance0, expectedAmount0);
+            assert.equal(poolBalance.poolBalance1, expectedAmount1)
         });
 
         it("mint state", async function () {
-            await assertMany({
-                pool,
+            await assertPoolState({
+                pool: wethUsdcPool
+            }, {
+                sqrtPriceX96: await testUtils.sqrtP(currentPrice),
+                tick: await testUtils.tick(currentPrice),
+                fees: [0, 0]
+            });
+
+            await assertBalances({
                 token0: weth,
                 token1: usdc
-            },{
+            }, {
+                userBalance0: parseEther("1") - expectedAmount0,
+                userBalance1: parseEther("5000") - expectedAmount1,
                 poolBalance0: poolBalance.poolBalance0,
-                poolBalance1: poolBalance.poolBalance1,
+                poolBalance1: poolBalance.poolBalance1
+            });
+
+            await assertPosition({
+                pool: wethUsdcPool
+            }, {
                 lowerTick: mintParamsArr[0].lowerTick,
                 upperTick: mintParamsArr[0].upperTick,
-                positionLiquidity: await liquidity(mintParamsArr[0], currentPrice),
-                currentLiquidity: 0,
-                sqrtPriceX96: await testUtils.sqrtP(currentPrice),
-                tick: await testUtils.tick(currentPrice)
+                liquidity: await liquidity(mintParamsArr[0], currentPrice),
+                feeGrowthInside0LastX128: 0,
+                feeGrowthInside1LastX128: 0,
+                tokensOwed0: 0,
+                tokensOwed1: 0
+            });
+
+            await assertTick({
+                pool: wethUsdcPool,
+            }, {
+                tick: mintParamsArr[0].lowerTick,
+                initialized: true,
+                liquidityGross: await liquidity(mintParamsArr[0], currentPrice),
+                liquidityNet: await liquidity(mintParamsArr[0], currentPrice)
+            })
+
+            await assertTick({
+                pool: wethUsdcPool,
+            }, {
+                tick: mintParamsArr[0].upperTick,
+                initialized: true,
+                liquidityGross: await liquidity(mintParamsArr[0], currentPrice),
+                liquidityNet: -(await liquidity(mintParamsArr[0], currentPrice))
+            })
+
+            await assertObservation({
+                pool: wethUsdcPool
+            }, {
+                index: 0,
+                timestamp: 1,
+                tickCumulative: 0,
+                initialized: true
             })
         })
     })
@@ -192,6 +279,8 @@ describe("UniswapV3Pool mint tests", function () {
         let currentPrice = "5000";
         let poolBalance;
         const mintParamsArr = [];
+        const expectedAmount0 = parseEther("1.733736657972640080");
+        const expectedAmount1 = parseEther("8749.999999999999999994");
         before(async function () {
             const mintParams0 = await mintParams(4545, 5500, "1", currentPrice);
             const mintParams1 = await mintParams(4000, 6250, "0.75", "3750");
@@ -208,24 +297,66 @@ describe("UniswapV3Pool mint tests", function () {
         })
 
         it("pool balances", function () {
-            assert.equal(poolBalance.poolBalance0, parseEther("1.748692227462822454"));
-            assert.equal(poolBalance.poolBalance1, parseEther("8749.999999999999999999"))
+            assert.equal(poolBalance.poolBalance0, expectedAmount0);
+            assert.equal(poolBalance.poolBalance1, expectedAmount1)
         });
 
         it("mint state", async function () {
-            await assertMany({
-                pool,
+            await assertPoolState({
+                pool: wethUsdcPool
+            }, {
+                sqrtPriceX96: await testUtils.sqrtP(currentPrice),
+                tick: await testUtils.tick(currentPrice),
+                fees: [0, 0]
+            });
+
+            await assertBalances({
                 token0: weth,
                 token1: usdc
-            },{
+            }, {
+                userBalance0: parseEther("2") - expectedAmount0,
+                userBalance1: parseEther("10000") - expectedAmount1,
                 poolBalance0: poolBalance.poolBalance0,
-                poolBalance1: poolBalance.poolBalance1,
+                poolBalance1: poolBalance.poolBalance1
+            });
+
+            await assertPosition({
+                pool: wethUsdcPool
+            }, {
                 lowerTick: mintParamsArr[0].lowerTick,
                 upperTick: mintParamsArr[0].upperTick,
-                positionLiquidity: await liquidity(mintParamsArr[0], currentPrice),
-                currentLiquidity: await liquidity(mintParamsArr[0], currentPrice) + await liquidity(mintParamsArr[1], currentPrice),
-                sqrtPriceX96: await testUtils.sqrtP(currentPrice),
-                tick: await testUtils.tick(currentPrice)
+                liquidity: await liquidity(mintParamsArr[0], currentPrice),
+                feeGrowthInside0LastX128: 0,
+                feeGrowthInside1LastX128: 0,
+                tokensOwed0: 0,
+                tokensOwed1: 0
+            });
+
+            await assertTick({
+                pool: wethUsdcPool,
+            }, {
+                tick: mintParamsArr[0].lowerTick,
+                initialized: true,
+                liquidityGross: await liquidity(mintParamsArr[0], currentPrice),
+                liquidityNet: await liquidity(mintParamsArr[0], currentPrice)
+            })
+
+            await assertTick({
+                pool: wethUsdcPool,
+            }, {
+                tick: mintParamsArr[0].upperTick,
+                initialized: true,
+                liquidityGross: await liquidity(mintParamsArr[0], currentPrice),
+                liquidityNet: -(await liquidity(mintParamsArr[0], currentPrice))
+            })
+
+            await assertObservation({
+                pool: wethUsdcPool
+            }, {
+                index: 0,
+                timestamp: 1,
+                tickCumulative: 0,
+                initialized: true
             })
         })
     })
@@ -238,6 +369,8 @@ describe("UniswapV3Pool mint tests", function () {
         let currentPrice = "5000";
         let poolBalance;
         const mintParamsArr = [];
+        const expectedAmount0 = parseEther("1.495924438559718081");
+        const expectedAmount1 = parseEther("8749.999999999999999994");
         before(async function () {
             const mintParams0 = await mintParams(4545, 5500, "1", currentPrice);
             const mintParams1 = await mintParams(4000, 4999, "0.75", "3750");
@@ -256,51 +389,71 @@ describe("UniswapV3Pool mint tests", function () {
         })
 
         it("pool balances", function () {
-            assert.equal(poolBalance.poolBalance0, parseEther("1.498995580131581600"));
-            assert.equal(poolBalance.poolBalance1, parseEther("8749.999999999999999993"))
+            assert.equal(poolBalance.poolBalance0, expectedAmount0);
+            assert.equal(poolBalance.poolBalance1, expectedAmount1)
         });
 
         it("mint state", async function () {
-            await assertMany({
-                pool,
+            await assertPoolState({
+                pool: wethUsdcPool
+            }, {
+                sqrtPriceX96: await testUtils.sqrtP(currentPrice),
+                tick: await testUtils.tick(currentPrice),
+                fees: [0, 0]
+            });
+
+            await assertBalances({
                 token0: weth,
                 token1: usdc
-            },{
+            }, {
+                userBalance0: parseEther("2") - expectedAmount0,
+                userBalance1: parseEther("10000") - expectedAmount1,
                 poolBalance0: poolBalance.poolBalance0,
-                poolBalance1: poolBalance.poolBalance1,
+                poolBalance1: poolBalance.poolBalance1
+            });
+
+            await assertPosition({
+                pool: wethUsdcPool
+            }, {
                 lowerTick: mintParamsArr[0].lowerTick,
                 upperTick: mintParamsArr[0].upperTick,
-                positionLiquidity: await liquidity(mintParamsArr[0], currentPrice),
-                currentLiquidity: await liquidity(mintParamsArr[0], currentPrice),
-                sqrtPriceX96: await testUtils.sqrtP(currentPrice),
-                tick: await testUtils.tick(currentPrice)
+                liquidity: await liquidity(mintParamsArr[0], currentPrice),
+                feeGrowthInside0LastX128: 0,
+                feeGrowthInside1LastX128: 0,
+                tokensOwed0: 0,
+                tokensOwed1: 0
+            });
+
+            await assertTick({
+                pool: wethUsdcPool,
+            }, {
+                tick: mintParamsArr[0].lowerTick,
+                initialized: true,
+                liquidityGross: await liquidity(mintParamsArr[0], currentPrice),
+                liquidityNet: await liquidity(mintParamsArr[0], currentPrice)
+            })
+
+            await assertTick({
+                pool: wethUsdcPool,
+            }, {
+                tick: mintParamsArr[0].upperTick,
+                initialized: true,
+                liquidityGross: await liquidity(mintParamsArr[0], currentPrice),
+                liquidityNet: -(await liquidity(mintParamsArr[0], currentPrice))
+            })
+
+            await assertObservation({
+                pool: wethUsdcPool
+            }, {
+                index: 0,
+                timestamp: 1,
+                tickCumulative: 0,
+                initialized: true
             })
         })
     })
 
 })
-
-async function mintParamsToTicks(mintParams, currentPrice) {
-    const result = [];
-
-    const liq = liquidity(mintParams, currentPrice);
-
-    result.push({
-        tick: mintParams.lowerTick,
-        initialized: true,
-        liquidityGross: liq,
-        liquidityNet: liq
-    })
-
-    result.push({
-        tick: mintParams.upper,
-        initialized: true,
-        liquidityGross: liq,
-        liquidityNet: -liq
-    })
-
-    return result;
-}
 
 async function liquidity(mintParams, currentPrice) {
     return await testUtils.getLiquidityForAmounts(
@@ -331,12 +484,11 @@ async function mintParams(lowerPrice, upperPrice, amount0, amount1) {
 async function setup(params) {
     signers = await ethers.getSigners();
     accounts = signers.map((x) => x.address);
-    ownerSigner = signers[0];
-    ownerAddress = accounts[0];
     lpSigner = signers[5];
     lpAddress = accounts[5];
+    ownerSigner = signers[0];
+    ownerAddress = accounts[0];
 
-    // 部署WETH和USDC合约
     usdc = await ethers.deployContract("ERC20Mintable", ["USDC", "USDC", ownerAddress]);
     weth = await ethers.deployContract("ERC20Mintable", ["Ether", "WETH", ownerAddress]);
     usdcAddress = usdc.target;
