@@ -1,6 +1,7 @@
 const {assert, expect} = require('chai');
 const {ethers} = require('hardhat');
 const {AbiCoder, parseEther} = require("ethers");
+const env = require("hardhat");
 
 describe("UniswapV3Quotor", () => {
     let testUtils;
@@ -111,7 +112,7 @@ describe("UniswapV3Quotor", () => {
         quoterAddress = quoter.target;
     })
 
-    it("WETH => USDC quote", async function () {
+    it("WETH => USDC quoteSingle", async function () {
         const quote = await quoter.quoteSingle.staticCall({
             tokenInAddress: wethAddress,
             tokenOutAddress: usdcAddress,
@@ -124,7 +125,7 @@ describe("UniswapV3Quotor", () => {
         assert.equal(quote[2], "85163")
     })
 
-    it("WETH <= USDC quote", async function () {
+    it("WETH <= USDC quoteSingle", async function () {
         const quote = await quoter.quoteSingle.staticCall({
             tokenInAddress: usdcAddress,
             tokenOutAddress: wethAddress,
@@ -137,7 +138,7 @@ describe("UniswapV3Quotor", () => {
         assert.equal(quote[2], "85183")
     })
 
-    it("WETH => USDC quote and swap", async function () {
+    it("WETH => USDC quoteSingle and swapSingle", async function () {
         const sqrtPriceLimitX96 = await testUtils.sqrtP(4993);
         const amountIn = parseEther("0.01337");
 
@@ -167,7 +168,7 @@ describe("UniswapV3Quotor", () => {
         assert.equal(-swapEvent.args[3], amountOut);
     })
 
-    it(" WETH <= USDC quote and swap", async function () {
+    it(" WETH <= USDC quoteSingle and swapSingle", async function () {
         const sqrtPriceLimitX96 = await testUtils.sqrtP(5010);
         const amountIn = parseEther("55")
 
@@ -197,7 +198,54 @@ describe("UniswapV3Quotor", () => {
         assert.equal(swapEvent.args[3], amountIn);
     })
 
-    it("UNI => WETH => USDC", async function () {
+    it("UNI => WETH => USDC quote", async function () {
+        const feeBytes = ethers.getBytes(ethers.toBeHex(3000, 3)); // uint24 bytes3
+        const path = ethers.concat([
+            ethers.getBytes(uniAddress),
+            feeBytes,
+            ethers.getBytes(wethAddress),
+            feeBytes,
+            ethers.getBytes(usdcAddress)
+        ]);
+
+        const quote = await quoter.quote.staticCall(path, parseEther("3"));
+
+        const amountOut = quote[0];
+        const sqrtPriceX96AfterList = quote[1];
+        const tickAfterList = quote[2];
+
+        assert.equal(amountOut, parseEther("1463.526910287777459391"))
+        assert.equal(sqrtPriceX96AfterList[0], "251771729382670294931681708505");
+        assert.equal(sqrtPriceX96AfterList[1], "5526649752528369868810372074279");
+        assert.equal(tickAfterList[0], "23124");
+        assert.equal(tickAfterList[1], "84904");
+    })
+
+    it("UNI => WETH => USDC quote and swap", async function () {
+        const feeBytes = ethers.getBytes(ethers.toBeHex(3000, 3)); // uint24 bytes3
+        const path = ethers.concat([
+            ethers.getBytes(uniAddress),
+            feeBytes,
+            ethers.getBytes(wethAddress),
+            feeBytes,
+            ethers.getBytes(usdcAddress)
+        ]);
+
+        const amountIn = parseEther("3");
+
+        const quote = await quoter.quote.staticCall(path, amountIn);
+        const amountOut = quote[0];
+
+        await manager.connect(traderSigner).swap({
+            path: path,
+            recipient: traderAccount,
+            amountIn,
+            minAmountOut: amountOut
+        });
+
+        const filter = wethUsdcPool.filters.Swap;
+        const events = await wethUsdcPool.queryFilter(filter, -1);
+        assert.equal(-events[1].args[3], amountOut);
 
     })
 })
