@@ -61,20 +61,34 @@ contract UniswapV3Manager is IUniswapV3Manager {
         }
     }
 
-    function swapSingle(SwapSingleParams calldata params) public returns (uint256 amountOut){
-        amountOut = _swap(
-            params.amountIn,
-            msg.sender,
-            params.sqrtPriceLimitX96,
-            SwapCallbackData({
-                path: abi.encodePacked(
-                    params.tokenInAddress,
-                    params.fee,
-                    params.tokenOutAddress
-                ),
-                payerAddress: msg.sender
-            })
-        );
+    function swap(SwapParams memory params) public returns (uint256 amountOut) {
+        address payer = msg.sender;
+        bool hasMultiplePools;
+
+        while (true) {
+            hasMultiplePools = params.path.hasMultiplePools();
+
+            params.amountIn = _swap(
+                params.amountIn,
+                hasMultiplePools ? address(this) : params.recipient,
+                0,
+                SwapCallbackData({
+                    path: params.path.getFirstPool(),
+                    payerAddress: payer
+                })
+            );
+
+            if (hasMultiplePools) {
+                payer = address(this);
+                params.path = params.path.skipToken();
+            } else {
+                amountOut = params.amountIn;
+                break;
+            }
+        }
+
+        if (amountOut < params.minAmountOut)
+            revert TooLittleReceived(amountOut);
     }
 
     function _swap(
@@ -82,7 +96,7 @@ contract UniswapV3Manager is IUniswapV3Manager {
         address recipient,
         uint160 sqrtPriceLimitX96,
         SwapCallbackData memory data
-    ) public returns (uint256 amountOut) {
+    ) internal returns (uint256 amountOut) {
         (address tokenInAddress, address tokenOutAddress, uint24 fee) = data.path.decodeFirstPool();
         bool zeroForOne = tokenInAddress < tokenOutAddress;
         uint160 sqrtPriceLimit = sqrtPriceLimitX96;
