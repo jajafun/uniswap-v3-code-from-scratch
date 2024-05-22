@@ -1,4 +1,4 @@
-const {ethers} = require("hardhat");
+const {ethers, run} = require("hardhat");
 const {parseEther} = ethers;
 
 let testUtils;
@@ -14,8 +14,6 @@ async function main() {
     console.log("owner address", ownerAddress);
     console.log("lp address", lpAddress);
 
-    const poolArtifactLocation = "./artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json";
-
     testUtils = await ethers.deployContract("TestUtils");
     console.log("TestUtils address", testUtils.target);
 
@@ -30,8 +28,12 @@ async function main() {
         });
         futureTokenAddresses.push(futureAddress);
     }
+    console.log("futureTokenAddresses");
+    console.log(futureTokenAddresses);
 
     const sorted = futureTokenAddresses.slice().sort();
+    sorted.forEach((item, index) => console.log(index, item));
+
     const seq = [];
     futureTokenAddresses.forEach((item) => {
         seq.push(sorted.indexOf(item));
@@ -47,7 +49,12 @@ async function main() {
 
     const tokens = {};
     for (let i = 0; i <seq.length; i++) {
-        tokens[seq[i]] = (await ethers.deployContract("ERC20Mintable", tokenInfos[seq[i]]));
+        console.log("nonce", await ownerSigner.getNonce());
+
+        let seqElement = seq[i];
+        let tokenInfo = tokenInfos[seqElement];
+        tokens[seqElement] = await ethers.deployContract("ERC20Mintable", tokenInfo);
+        console.log("deploy token", seqElement, tokenInfo);
     }
 
     const weth = tokens[0];
@@ -66,41 +73,29 @@ async function main() {
     console.log("WBTC address", wbtcAddress);
     console.log("USDT address", usdtAddress);
 
+    console.log("nonce", await ownerSigner.getNonce());
     const factory = await ethers.deployContract("UniswapV3Factory");
     const factoryAddress = factory.target;
     console.log("Factory address", factoryAddress);
 
+    console.log("nonce", await ownerSigner.getNonce());
     const manager = await ethers.deployContract("UniswapV3Manager", [factoryAddress]);
     const managerAddress = manager.target;
     console.log("Manager address", managerAddress);
 
+    console.log("nonce", await ownerSigner.getNonce());
     const quoter = await ethers.deployContract("UniswapV3Quoter", [factoryAddress]);
     const quoterAddress = quoter.target;
     console.log("Quoter address", quoterAddress);
 
+    console.log("nonce", await ownerSigner.getNonce());
     await factory.createPool(wethAddress, usdcAddress, 3000);
+
+    console.log("nonce", await ownerSigner.getNonce());
     await factory.createPool(wethAddress, uniAddress, 3000);
+
+    console.log("nonce", await ownerSigner.getNonce());
     await factory.createPool(wbtcAddress, usdtAddress, 3000);
-
-    const poolCreatedEvents = await factory.queryFilter(factory.filters.PoolCreated, -5);
-    console.log(poolCreatedEvents)
-    const wethUsdcPoolAddress = poolCreatedEvents[0].args[3];
-    const wethUniPoolAddress = poolCreatedEvents[1].args[3];
-    const wbtcUsdtPoolAddress = poolCreatedEvents[2].args[3];
-
-    console.log("WETH/USDC address", wethUsdcPoolAddress);
-    console.log("WETH/UNI address", wethUniPoolAddress);
-    console.log("WBTC/USDT address", wbtcUsdtPoolAddress);
-
-    const {abi} = JSON.parse(require("fs").readFileSync(poolArtifactLocation).toString());
-    const wethUsdcPool = new ethers.Contract(wethUsdcPoolAddress, abi, ethers.provider);
-    await wethUsdcPool.connect(lpSigner).initialize(await testUtils.sqrtP(5000));
-
-    const wethUniPool = new ethers.Contract(wethUniPoolAddress, abi, ethers.provider);
-    await wethUniPool.connect(lpSigner).initialize(await testUtils.sqrtP(10));
-
-    const wbtcUsdtPool = new ethers.Contract(wbtcUsdtPoolAddress, abi, ethers.provider);
-    await wbtcUsdtPool.connect(lpSigner).initialize(await testUtils.sqrtP(20000));
 
     let wethAmount = parseEther("100");
     let usdcAmount = parseEther("2000000");
@@ -109,61 +104,26 @@ async function main() {
     let usdtAmount = parseEther("2000000");
 
     await weth.mint(lpAddress, wethAmount);
+    console.log("mint weth", lpAddress, wethAmount);
     await usdc.mint(lpAddress, usdcAmount);
+    console.log("mint usdc", lpAddress, usdcAmount);
     await uni.mint(lpAddress, uniAmount);
+    console.log("mint uni", lpAddress, uniAmount);
     await wbtc.mint(lpAddress, wbtcAmount);
+    console.log("mint wbtc", lpAddress, wbtcAmount);
     await usdt.mint(lpAddress, usdcAmount);
+    console.log("mint usdt", lpAddress, usdcAmount);
 
     await weth.connect(lpSigner).approve(managerAddress, wethAmount);
+    console.log("approve weth", managerAddress, wethAmount);
     await usdc.connect(lpSigner).approve(managerAddress, usdcAmount);
+    console.log("approve usdc", managerAddress, usdcAmount);
     await uni.connect(lpSigner).approve(managerAddress, uniAmount);
+    console.log("approve uni", managerAddress, uniAmount);
     await wbtc.connect(lpSigner).approve(managerAddress, wbtcAmount);
+    console.log("approve wbtc", managerAddress, wbtcAmount);
     await usdt.connect(lpSigner).approve(managerAddress, usdtAmount);
-
-
-    await manager.connect(lpSigner).mint(await mintParams(
-        wethAddress,
-        usdcAddress,
-        4545,
-        5500,
-        parseEther("10"),
-        parseEther("50000")
-    ));
-
-    await manager.connect(lpSigner).mint(await mintParams(
-        wethAddress,
-        uniAddress,
-        7,
-        13,
-        parseEther("10"),
-        parseEther("100")
-    ));
-
-    await manager.connect(lpSigner).mint(await mintParams(
-        wbtcAddress,
-        usdtAddress,
-        19400,
-        20500,
-        parseEther("10"),
-        parseEther("200000")
-    ));
-
-}
-
-async function mintParams(token0Address, token1Address, lowerPrice, upperPrice, amount0, amount1) {
-    const lowerTick = await testUtils.tick60(lowerPrice);
-    const upperTick = await testUtils.tick60(upperPrice);
-    return {
-        token0Address: token0Address,
-        token1Address: token1Address,
-        fee: 3000,
-        lowerTick: lowerTick,
-        upperTick: upperTick,
-        amount0Desired: amount0,
-        amount1Desired: amount1,
-        amount0Min: 0,
-        amount1Min: 0
-    }
+    console.log("approve usdt", managerAddress, usdtAmount);
 }
 
 main()
