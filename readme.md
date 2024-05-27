@@ -1,6 +1,5 @@
 
 ```shell
-npx hardhat run ./scripts/deploy.js --network hardhat
 npx hardhat run ./scripts/deploy.js --network sepolia
 ```
 
